@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from past.builtins import xrange
 
+
 class TwoLayerNet(object):
     """
     A two-layer fully-connected neural network. The net has an input dimension of
@@ -80,7 +81,10 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # Wei: ReLu activation
+        z1 = X @ W1 + b1
+        H1 = np.maximum(0, z1) 
+        scores = H1 @ W2 + b2
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -98,7 +102,14 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # Wei: Softmax implementation from softmax.py
+        f = scores
+        f -= np.max(f)  # normalization trick for stability
+        p = np.exp(f)/np.sum(np.exp(f), axis=1, keepdims=True)  # softmax logits
+
+        loss = - np.sum(np.log(p[range(N), y]))
+        loss /= N
+        loss += reg * (np.sum(W1 * W1) + np.sum(W2 * W2))
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -111,7 +122,28 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        # dL/dscores
+        dscores = p
+        dscores[range(N), y] -= 1 
+        dscores /= N
+
+        # dL/dW2 = dscores/dW2 x dL/dscores
+        grads['W2'] = H1.T @ dscores  # dscores is upstream gradient, and H1 is local gradeint
+
+        # dL/db2 = 1^T x dL/dscores 
+        grads['b2'] = np.sum(dscores, axis=0)
+
+        # dL/dW1
+        dH = dscores @ W2.T
+        dH[z1 <=0] = 0
+        grads['W1'] = X.T @ dH
+        
+        # dL/db1
+        grads['b1'] = np.sum(dH, axis=0)
+
+        # regularization gradient
+        grads['W1'] += reg * 2 * W1
+        grads['W2'] += reg * 2 * W2
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -156,7 +188,9 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            pass
+            batch_indices = np.random.choice(np.arange(num_train), batch_size)
+            X_batch = X[batch_indices]
+            y_batch = y[batch_indices]
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -172,7 +206,10 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            pass
+            self.params['W1'] -= learning_rate * grads['W1']
+            self.params['W2'] -= learning_rate * grads['W2']
+            self.params['b1'] -= learning_rate * grads['b1']
+            self.params['b2'] -= learning_rate * grads['b2']
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -218,7 +255,7 @@ class TwoLayerNet(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        y_pred = np.argmax(self.loss(X), axis=1)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 

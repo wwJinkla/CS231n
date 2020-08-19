@@ -33,7 +33,27 @@ def softmax_loss_naive(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    num_classes = W.shape[1]
+    num_train = X.shape[0]
+    for i in range(num_train):
+        f = X[i].dot(W)
+        f -= np.max(f)  # normalization trick for stability
+        p = np.exp(f) / np.sum(np.exp(f))  # Softmax
+        # compute loss = NLL of Softmax
+        loss += -np.log(p[y[i]])
+
+        # compute grad
+        for j in range(num_classes):
+            dW[:, j] += p[j] * X[i]
+        
+        # correction to grad for the correct class
+        dW[:, y[i]] -= X[i]
+
+    loss /= num_train
+    loss += reg * np.sum(W * W)
+
+    dW /= num_train
+    dW += reg * 2 * W
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -58,7 +78,20 @@ def softmax_loss_vectorized(W, X, y, reg):
     #############################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    num_train = X.shape[0]
+
+    f = X @ W
+    f -= np.max(f)  # normalization trick for stability
+    p = np.exp(f)/np.sum(np.exp(f), axis=1)[:, np.newaxis] # Softmax
+
+    loss = - np.sum(np.log(p[range(num_train), y]))
+    loss /= num_train
+    loss += reg * np.sum(W * W)
+
+    p[range(num_train), y] -= 1  # Wei: I don't understand why we need range(num_train). Why doesn't : works?
+    dW = X.T @ p
+    dW /= num_train
+    dW += reg * 2 * W
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
