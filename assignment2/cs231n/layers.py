@@ -27,9 +27,9 @@ def affine_forward(x, w, b):
     # will need to reshape the input into rows.                               #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    N = x.shape[0]
+    x_reshape = x.copy().reshape(N, -1)
+    out = x_reshape @ w + b
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -61,7 +61,12 @@ def affine_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    dx = dout @ w.T
+    dx = dx.reshape(x.shape)
+
+    dw = x.copy().reshape(x.shape[0],-1).T @ dout
+
+    db = np.sum(dout, axis=0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -87,7 +92,7 @@ def relu_forward(x):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    out = np.maximum(0, x) 
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -114,7 +119,8 @@ def relu_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    dx = dout
+    dx[x <= 0] = 0 
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -194,7 +200,15 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        sample_mean = x.mean(axis=0)
+        sample_var = x.std(axis=0) ** 2
+        x_hat = (x - sample_mean) / np.sqrt(sample_var + eps)
+        out = gamma * x_hat + beta
+
+        running_mean = momentum * running_mean + (1 - momentum) * sample_mean
+        running_var = momentum * running_var + (1 - momentum) * sample_var
+
+        cache = x, gamma, sample_mean, sample_var, eps, x_hat
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -209,7 +223,8 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         #######################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        x_hat = (x - running_mean)/ np.sqrt(running_var + eps)
+        out = gamma * x_hat + beta
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         #######################################################################
@@ -250,8 +265,36 @@ def batchnorm_backward(dout, cache):
     # might prove to be helpful.                                              #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    N = dout.shape[0]
+    x, gamma, sample_mean, sample_var, eps, x_hat = cache
+    
+    # Wei: implemented according to page 4 of the orignal paper
+    # this is not really doing back prop per layer though :/
 
-    pass
+    dx_hat = dout * gamma
+    dsample_var = np.sum(dx_hat * (x - sample_mean) * (-1/2) * (sample_var + eps) ** (-3/2), axis=0)
+    dsample_mean = np.sum(dx_hat * (-1)/np.sqrt(sample_var + eps), axis=0)
+    dsample_mean += dsample_var * np.sum((-2) * (x - sample_mean) / N, axis=0)
+
+    dx = dx_hat / np.sqrt(sample_var + eps) + dsample_var * 2 * (x - sample_mean) / N + dsample_mean / N
+    dgamma = np.sum(dout * x_hat, axis=0)
+    dbeta = np.sum(dout, axis=0)
+
+    # Backprop implementations
+
+    # dfdz = dout * gamma                                  # [NxD]
+    # dudx = 1/N                                           # [NxD]
+    # dvdx = 2/N * (x - sample_mean)                       # [NxD] 
+    # dzdx = 1 / np.sqrt(sample_var)                       # [NxD]
+    # dzdu = -1 / np.sqrt(sample_var)                      # [1xD]
+    # dzdv = -0.5*(sample_var**-1.5)*(x-sample_mean)       # [NxD]
+    # dvdu = -2/N * np.sum(x - sample_mean, axis=0)        # [1xD]
+
+    # dx = dfdz*dzdx + np.sum(dfdz*dzdu,axis=0)*dudx + \
+    #      np.sum(dfdz*dzdv,axis=0)*(dvdx+dvdu*dudx)
+    
+    # dgamma = np.sum(dout * x_hat, axis=0)
+    # dbeta = np.sum(dout, axis=0)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -286,7 +329,30 @@ def batchnorm_backward_alt(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+
+    # Wei's TODO: check here https://kevinzakka.github.io/2016/09/14/batch_normalization/
+    # or here http://cthorey.github.io./backpropagation/. The former is more promisiing
+    #   This implementation incurs a large numerical error. Really need to check either the 
+    # math or the implementation. I suspect that it is actually correct. 
+    x, gamma, sample_mean, sample_var, eps, x_hat = cache
+
+    N = dout.shape[0]
+    sigma = (x - sample_mean)/np.sqrt(sample_var)
+    dsigma = dout * gamma                                               # [NxD]
+    dsigma_sum = np.sum(dsigma,axis=0)                                  # [1xD]
+    
+    dx = dsigma - dsigma_sum/N - np.sum(dsigma * sigma, axis=0) * sigma/N  # [NxD]
+    dx /= np.sqrt(sample_var)
+
+    dgamma = np.sum(dout * x_hat, axis=0)
+    dbeta = np.sum(dout, axis=0)
+
+    # first_part = gamma * inv_x_std / N
+    # second_part = N * dout
+    # third_part = np.sum(dout, axis=0)
+    # forth_part = inv_x_std ** 2 * x_mean_0 * np.sum(dout * x_mean_0, axis=0)
+
+    # dx = first_part * (second_part - third_part - forth_part)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -332,7 +398,14 @@ def layernorm_forward(x, gamma, beta, ln_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x = x.T
+    sample_mean = x.mean(axis=0)
+    sample_var = x.std(axis=0) ** 2
+    x_hat = (x - sample_mean) / np.sqrt(sample_var + eps)
+    x_hat = x_hat.T
+    out = gamma * x_hat + beta
+
+    cache = x, gamma, sample_mean, sample_var, eps, x_hat
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -366,14 +439,30 @@ def layernorm_backward(dout, cache):
     # still apply!                                                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    D = dout.shape[1]
+    x, gamma, sample_mean, sample_var, eps, x_hat = cache
 
-    pass
+    dgamma = np.sum(dout * x_hat, axis=0)
+    dbeta = np.sum(dout, axis=0)
+
+    dfdz = dout * gamma                                  # [NxD]
+    dfdz = dfdz.T
+    dudx = 1/D                                           # [NxD]
+    dvdx = 2/D * (x - sample_mean)                       # [NxD]
+    dzdx = 1 / np.sqrt(sample_var)                       # [NxD]
+    dzdu = -1 / np.sqrt(sample_var)                      # [1xD]
+    dzdv = -0.5*(sample_var**-1.5)*(x-sample_mean)       # [NxD]
+    dvdu = -2/D * np.sum(x - sample_mean, axis=0)        # [1xD]
+
+    dx = dfdz*dzdx + np.sum(dfdz*dzdu,axis=0)*dudx + \
+         np.sum(dfdz*dzdv,axis=0)*(dvdx+dvdu*dudx)
+    
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    return dx, dgamma, dbeta
+    return dx.T, dgamma, dbeta
 
 
 def dropout_forward(x, dropout_param):
