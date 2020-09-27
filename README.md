@@ -24,7 +24,7 @@ In notebook BatchNormalization.ipynb you will implement batch normalization, and
 - [x] Q3: Dropout (10 points)
 The notebook Dropout.ipynb will help you implement Dropout and explore its effects on model generalization.
 
-- [ ] Q4: Convolutional Networks (30 points)
+- [x] Q4: Convolutional Networks (30 points)
 In the IPython Notebook ConvolutionalNetworks.ipynb you will implement several new layers that are commonly used in convolutional networks.
 
 - [ ] Q5: PyTorch / TensorFlow on CIFAR-10 (10 points)
