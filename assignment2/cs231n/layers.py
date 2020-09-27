@@ -805,7 +805,10 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    x_reshape = x.swapaxes(1, 3).reshape(-1, C)  # (N, C, H, W) -> (N*H*W, C)
+    out, cache = batchnorm_forward(x_reshape, gamma, beta, bn_param)
+    out = out.reshape((N, W, H, C)).swapaxes(1,3)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -839,7 +842,10 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+    dout_reshape = dout.swapaxes(1, 3).reshape(-1, C)  # (N, C, H, W) -> (N*H*W, C)
+    dx, dgamma, dbeta = batchnorm_backward_alt(dout_reshape, cache)
+    dx = dx.reshape((N, W, H, C)).swapaxes(1,3)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -879,7 +885,23 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    x = np.reshape(x, (N*G, C//G*H*W))
+    
+    # Transpose x to use batchnorm code
+    x = x.T
+
+    # Just copy from batch normalization cdoe
+
+    sample_mean = x.mean(axis=0)
+    sample_var = x.std(axis=0) ** 2
+    x_hat = (x - sample_mean) / np.sqrt(sample_var + eps)
+    
+    # Transpose x_hat and reshape
+    x_hat = np.reshape(x_hat.T, (N, C, H, W))
+    out = gamma[np.newaxis, :, np.newaxis, np.newaxis] * x_hat + beta[np.newaxis, :, np.newaxis, np.newaxis]
+
+    cache = x, gamma, sample_mean, sample_var, eps, x_hat, G
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -909,7 +931,25 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+    x, gamma, x_mean, x_var, eps, x_hat, G = cache
+    
+    # Set keepdims=True to make dbeta and dgamma's shape be (1, C, 1, 1)
+    dgamma = np.sum(dout * x_hat, axis=(0, 2, 3), keepdims=True)
+    dbeta = np.sum(dout, axis=(0, 2, 3), keepdims=True)
+
+    Nprime, D = x.shape  # (C//G*H*W, N*G) 
+    dx_hat = dout * gamma  # (N, C, H, W)
+
+    # (N, C, H, W) -> (Nprime, D )
+    dx_hat = dx_hat.reshape(N*G, C//G*H*W)
+    dx_hat_T = dx_hat.T
+
+    dx_var = -0.5 * np.sum(dx_hat_T * (x - x_mean) * np.power(x_var + eps, -3 / 2), axis=0)
+    dx_mean = np.sum(dx_hat_T * (-1 / np.sqrt(x_var + eps)), axis=0) + np.sum(-2 * dx_var * (x - x_mean), axis=0) / Nprime
+
+    dx_group_T = dx_hat_T / np.sqrt(x_var + eps) + dx_var * 2 * (x - x_mean) / Nprime + dx_mean / Nprime
+    dx = dx_group_T.T.reshape(N, C, H, W)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
